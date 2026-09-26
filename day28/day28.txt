@@ -1,0 +1,38 @@
+from datetime import datetime, timedelta
+from collections import Counter, defaultdict
+
+print("=== 1. datetime 时间处理 ===")
+# 获取当前本地时间
+now = datetime.now()
+print(f"当前原生时间对象: {now}")
+
+# 时间转字符串 (格式化)
+time_str = now.strftime("%Y年%m月%d日 %H:%M:%S")
+print(f"格式化输出: {time_str}")
+
+# 字符串转时间 (解析)
+api_time_str = "2026-09-25 11:48:19"
+parsed_time = datetime.strptime(api_time_str, "%Y-%m-%d %H:%M:%S")
+print(f"解析回原生对象: {parsed_time}, 类型: {type(parsed_time)}")
+
+# 时间计算：会员 30 天后到期
+expire_time = now + timedelta(days=30)
+print(f"30天后到期时间: {expire_time.strftime('%Y-%m-%d')}")
+
+
+print("\n=== 2. collections 高阶容器 ===")
+# Counter 词频统计
+votes = ["A", "B", "A", "C", "A", "B", "A"]
+vote_counts = Counter(votes)
+print(f"投票统计结果: {vote_counts}")
+print(f"最高票数的 1 个选项: {vote_counts.most_common(1)}")
+
+# defaultdict 字典归类
+# 传入 list 作为默认工厂，遇到新分类自动创建空列表
+logs = [("error", "数据库连接超时"), ("info", "用户登录"), ("error", "内存不足")]
+log_dict = defaultdict(list)
+
+for level, msg in logs:
+    log_dict[level].append(msg)  # 直接 append，不用再做判空初始化！
+
+print("按级别归类的日志:", dict(log_dict))

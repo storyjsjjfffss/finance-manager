@@ -1,0 +1,3 @@
+python is an interpreted programming language
+python is widely used in data science and web development
+learning python is fun and rewarding

@@ -1,0 +1,7 @@
+多态（Polymorphism）、鸭子类型（Duck Typing）与抽象基类（abc 模块）。
+from abc import ABC, abstractmethod   # ① 导入抽象基类工具
+
+class BaseSender(ABC):                # ② 继承 ABC = 这是"抽象类"
+    @abstractmethod                   # ③ 标记"抽象方法"
+    def send(self, message):          # ④ 只有签名，没有实现（pass）
+        pass

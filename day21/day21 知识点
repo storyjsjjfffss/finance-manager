@@ -1,0 +1,24 @@
+. 模块化函数划分与异常要求
+load_tasks(filepath="tasks.json")：
+
+使用 try...except 安全读取文件并反序列化。
+
+若文件不存在（FileNotFoundError）或 JSON 解析失败（json.JSONDecodeError），优雅容错并返回空列表 []。
+
+save_tasks(tasks, filepath="tasks.json")：
+
+将任务列表序列化写入本地，保持格式规范（indent=4, ensure_ascii=False）。
+
+add_task(tasks, title)：
+
+title 去除首尾空格后若为空，使用 raise ValueError("任务标题不能为空！")。
+
+自动分配 id（若列表为空则为 1，否则为当前最大 id + 1）。
+
+状态默认设置为 "pending"，并保存到本地文件。
+
+complete_task(tasks, task_id)：
+
+在列表中查找指定 id 的任务。若未找到，raise LookupError(f"未找到 ID 为 {task_id} 的任务！")。
+
+将任务状态修改为 "completed"，并同步更新保存到文件。

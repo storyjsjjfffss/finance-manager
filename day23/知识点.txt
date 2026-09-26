@@ -1,0 +1,40 @@
+1. 核心知识点
+一、 私有属性与数据保护（Private Attributes）
+在默认情况下，对象的属性是完全公开的（例如 hero_a.hp = -9999 可以被随意篡改）。为了保护核心数据，面向对象倡导封装。
+
+双下划线私有化 __var：
+在属性或方法名前加上两个下划线 __，Python 就会对其进行名称修饰（Name Mangling），外部无法再直接通过 obj.__var 访问或篡改。
+
+Python
+class BankAccount:
+    def __init__(self, owner, balance):
+        self.owner = owner
+        self.__balance = balance  # 私有属性，外部无法直接访问
+
+    def get_balance(self):
+        """安全的只读访问器"""
+        return self.__balance
+
+
+二、 三种方法类型对比
+在类定义内部，不仅可以定义普通的实例方法，还可以定义操作整个类或纯工具性质的方法：
+
+实例方法,无,self（当前对象）,可以访问实例属性，也可以访问类属性,最常见的业务操作，依赖具体对象的数据
+类方法,@classmethod,cls（当前类本身）,只能访问类属性，无法访问某个实例的属性,编写“备用构造器”（工厂方法，如从字符串/字典创建对象）
+静态方法,@staticmethod,无强制参数（像普通函数）,既不依赖 self，也不依赖 cls,逻辑归属于该类，但不需要访问类与实例状态的工具函数
+
+三、 属性装饰器 @property
+让我们可以像访问普通属性一样调用一个计算方法，免去了调用时的括号 ()：
+
+Python
+class Circle:
+    def __init__(self, radius):
+        self.radius = radius
+
+    @property
+    def area(self):
+        return 3.14159 * self.radius ** 2
+
+c = Circle(5)
+# 像访问普通变量一样访问 area，不需要加括号 c.area()
+print(c.area)

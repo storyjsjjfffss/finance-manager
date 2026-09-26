@@ -1,0 +1,7 @@
+进入第 26 天：魔法方法（Magic Methods / Dunder Methods）。
+魔法方法,触发的语法 / 内置函数,核心职责,返回类型要求
+__str__(self),"print(obj), str(obj)",提供给普通用户 / 终端展示的可读文本,必须返回 str
+__repr__(self),"调试窗口, 容器内打印 [obj], repr(obj)",面向开发者调试的精准对象描述，便于复现对象,必须返回 str
+__len__(self),len(obj),测量对象长度或内部容器大小,必须返回 ≥0 的 int
+"__eq__(self, other)",obj1 == obj2,自定义两个对象是否相等的比较规则,返回 bool
+"__add__(self, other)",obj1 + obj2,自定义加法运算符重载,通常返回同类的新对象

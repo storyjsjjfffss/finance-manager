@@ -1,0 +1,63 @@
+day3(web)
+在真实的财务管家系统中，我们需要向服务器提交新的账单数据。敏感或大量的数据（如账单金额、密码、长文本）
+不能明晃晃地挂在网址（URL）上，这就需要用到 POST 请求，把数据打包放在 HTTP 的 请求体（Body） 中发送。
+
+在 FastAPI 中，处理这种复杂数据的最强神兵利器叫 Pydantic。
+一、 Pydantic：自动校验的数据模型
+回想一下我们之前写面向对象时，写一个 Transaction 类需要手写又长又繁琐的 __init__ 函数来进行属性绑定。
+有了 Pydantic，你只需要声明变量和类型，它会自动帮你完成初始化、数据类型转换以及严格的合法性校验。
+
+二、 代码示范：编写“新增账单”接口
+看day31
+三、 今日体验任务：在 Swagger UI 中测试 POST
+POST 请求很难直接用浏览器的地址栏测试（地址栏敲回车默认全都是 GET 请求）。这就是 /docs 文档发挥巨大威力的时刻：
+
+day4(web)
+进入 Web 后端进阶 Day 4：RESTful API 设计与内存状态管理。
+
+一、 核心概念：RESTful API 风格
+在企业开发中，我们约定俗成地使用不同的 HTTP 方法 + 相同的网址来表达不同的操作（这叫 RESTful 风格）：
+
+POST /transactions -> 新增一笔账单
+
+GET /transactions -> 查询所有账单
+
+DELETE /transactions/{id} -> 删除某笔账单
+
+
+day(5web)
+
+
+day6
+Engine = 银行的“连接/调度中心”
+Session = 你这次去银行办业务的窗口
+SQL = 你具体要办理的业务
+                    用户
+                     │
+                     ↓
+              ┌─────────────┐
+              │   HTML页面   │
+              └──────┬──────┘
+                     │
+             JavaScript
+                     │
+        ┌────────────┼────────────┐
+        │            │            │
+        ↓            ↓            ↓
+      GET          POST        DELETE
+        │            │            │
+        └────────────┼────────────┘
+                     ↓
+              FastAPI 后端
+                     │
+                     ↓
+                SQLModel
+                     │
+                     ↓
+               SQLAlchemy
+                     │
+                     ↓
+                  Engine
+                     │
+                     ↓
+                  SQLite

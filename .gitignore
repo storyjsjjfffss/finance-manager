@@ -1,0 +1,4 @@
+__pycache__/
+.idea/
+*.db
+web_develop/day7_test/web6.txt

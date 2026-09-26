@@ -1,0 +1,38 @@
+在 PyCharm 中右键新建文件 day22.py，正式开启 第 4 周：面向对象编程（OOP，Object-Oriented Programming）。
+
+这是 Python 乃至整个现代软件工程中最核心的编程范式。过去我们写的是“面向过程”代码——数据（字典/列表）与逻辑（处理函数）是割裂的；而在面向对象中，我们将数据与操作该数据的行为打包为一个独立的实体。
+
+1. 核心知识点
+一、 类（Class）与对象（Object）的关系
+类（Class）：一张设计图纸 / 一个模具。它定义了一类事物“拥有什么属性”以及“能执行什么行为”。
+
+对象 / 实例（Instance）：根据图纸造出来的具体实体。图纸只有一份，但根据它实例化的对象可以有成百上千个，每个对象的具体数据彼此独立。
+
+二、 类的定义与命名规范
+在 Python 中使用 class 关键字声明类。
+
+命名规范：遵循大驼峰命名法（PascalCase），首字母大写，不要加下划线，例如 UserProfile, BankAccount, Hero。
+
+三、 构造方法 __init__ 与 self 的本质
+Python
+class Dog:
+    def __init__(self, name, age):
+        # 实例属性初始化
+        self.name = name
+        self.age = age
+
+    def bark(self):
+        print(f"{self.name} 汪汪叫！")
+__init__ 构造方法：
+
+属于 Python 的“魔法方法”（双下划线开头和结尾）。
+
+当我们执行 d = Dog("旺财", 3) 时，Python 底层会自动调用 __init__，负责完成新对象的初始化赋值。
+
+self 的底层本质（最关键概念）：
+
+self 代表当前正在被操作的具体实例对象本身。
+
+当调用 d.bark() 时，Python 解释器在底层其实执行的是：Dog.bark(d)——它把 d 这个具体实例自动作为第一个参数塞给了 self。
+
+只要在类的方法内部需要访问或修改自己的属性，必须写 self.属性名。
