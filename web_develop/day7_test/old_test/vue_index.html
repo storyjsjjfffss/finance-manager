@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>极简财务管家 - Vue版</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+        .input-group { margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px; }
+        input { padding: 8px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 15px; background: #42b983; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #33996b; }
+        li { margin-bottom: 10px; padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;}
+        .delete-btn { background: #dc3545; padding: 4px 8px; font-size: 12px; }
+        .report-box { margin-top: 15px; padding: 15px; background: #e9ecef; border-radius: 8px; }
+    </style>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+
+    <div id="app">
+        <h1>💰 极简财务管家 (Vue.js)</h1>
+
+        <!-- 记账区域 -->
+        <div class="input-group">
+            <input type="number" v-model="newAmount" placeholder="金额 (如 50)">
+            <input type="text" v-model="newCategory" placeholder="分类 (如 餐饮)">
+            <button @click="addTransaction">记一笔</button>
+        </div>
+
+        <!-- 历史账单 -->
+        <h3>历史账单</h3>
+        <ul>
+            <li v-for="t in transactions" :key="t.id">
+                <span>[{{ t.t_type }}] {{ t.category }}: ¥{{ t.amount.toFixed(2) }}</span>
+                <button class="delete-btn" @click="deleteTransaction(t.id)">删除</button>
+            </li>
+        </ul>
+
+        <hr>
+
+        <!-- 新增：报表区域 -->
+        <h3>财务报表</h3>
+        <button @click="fetchReport">📊 生成分类汇总</button>
+
+        <!-- 魔法 4：条件渲染 (v-if)。只有当 reportData 里面有数据时，这个框才会显示出来 -->
+        <div v-if="reportData" class="report-box">
+            <strong>{{ reportData.report_type }}</strong>
+            <br><br>
+            <!-- 魔法 5：对象遍历。直接在网页标签上遍历 Python 传过来的字典 -->
+            <div v-for="(amount, category) in reportData.data" :key="category">
+                🔹 {{ category }}: ¥{{ amount.toFixed(2) }}
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        const API_BASE_URL = "http://127.0.0.1:8000";
+
+        createApp({
+            setup() {
+                const transactions = ref([]);
+                const newAmount = ref('');
+                const newCategory = ref('');
+
+                // 新增：专门用来存放报表数据的变量，初始值设为 null（空）
+                const reportData = ref(null);
+
+                const fetchTransactions = async () => {
+                    const response = await fetch(`${API_BASE_URL}/transactions`);
+                    transactions.value = await response.json();
+                };
+
+                const addTransaction = async () => {
+                    if (!newAmount.value || !newCategory.value) return alert("不能为空！");
+                    await fetch(`${API_BASE_URL}/transactions`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            amount: parseFloat(newAmount.value),
+                            category: newCategory.value,
+                            t_type: "支出"
+                        })
+                    });
+                    newAmount.value = '';
+                    newCategory.value = '';
+                    fetchTransactions();
+                };
+
+                const deleteTransaction = async (id) => {
+                    await fetch(`${API_BASE_URL}/transactions/${id}`, { method: "DELETE" });
+                    fetchTransactions();
+                };
+
+                // 新增：向 Python 请求报表数据的函数
+                const fetchReport = async () => {
+                    const response = await fetch(`${API_BASE_URL}/transactions/report`);
+                    // 以前你需要用 for 循环拼装 HTML 字符串
+                    // 现在：只需把字典塞进变量，Vue 会自动替你画到网页上！
+                    reportData.value = await response.json();//不能调用方法，但是会保留属性
+                };
+
+                onMounted(fetchTransactions);
+
+                // 记得把新变量和新函数暴露给上面 HTML 使用
+                return {
+                    transactions, newAmount, newCategory, reportData,
+                    addTransaction, deleteTransaction, fetchReport
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
