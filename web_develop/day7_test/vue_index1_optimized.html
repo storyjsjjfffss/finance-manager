@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极简财务管家 - 多用户版</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; max-width: 700px; margin: auto; }
+        .auth-box, .app-box { padding: 20px; background: #f5f5f5; border-radius: 8px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        input { padding: 8px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; width: 180px; }
+        button { padding: 8px 15px; margin-right: 6px; background: #42b983; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: #6c757d; }
+        .btn-danger, .delete-btn { background: #dc3545; }
+        .delete-btn { padding: 4px 8px; font-size: 12px; }
+        li { margin-bottom: 10px; padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .report-box { margin-top: 15px; padding: 15px; background: #e9ecef; border-radius: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: center; }
+        .message { margin-top: 10px; }
+        .error { color: #dc3545; }
+        .success { color: #198754; }
+        .empty { color: #777; }
+    </style>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+<div id="app">
+
+    <!-- ==================== 登录 / 注册 ==================== -->
+    <div v-if="!isLoggedIn" class="auth-box">
+        <h2>🔒 欢迎，请先登录</h2>
+        <div class="input-group">
+            <input type="text" v-model.trim="authUsername" placeholder="用户名" autocomplete="username">
+            <input type="password" v-model="authPassword" placeholder="密码" autocomplete="current-password" @keyup.enter="login">
+        </div>
+
+        <button @click="login" :disabled="loading">🔑 {{ loading ? "登录中..." : "登录" }}</button>
+        <button class="btn-secondary" @click="register" :disabled="loading">📝 注册新账号</button>
+
+        <div v-if="errorMessage" class="message error">{{ errorMessage }}</div>
+        <div v-if="successMessage" class="message success">{{ successMessage }}</div>
+    </div>
+
+    <!-- ==================== 主界面 ==================== -->
+    <div v-else class="app-box">
+        <div class="header">
+            <div>
+                <h2>💰 我的财务管家</h2>
+                <div>当前用户：<strong>{{ currentUsername }}</strong></div>
+            </div>
+            <button class="btn-danger" @click="logout">🚪 退出登录</button>
+        </div>
+
+        <!-- ==================== 记账 ==================== -->
+        <div class="input-group" style="margin-top: 20px;">
+            <input type="number" min="0" step="0.01" v-model.number="newAmount" placeholder="金额，例如 50">
+            <input type="text" v-model.trim="newCategory" placeholder="分类，例如 餐饮">
+            <button @click="addTransaction" :disabled="loading">记一笔</button>
+        </div>
+
+        <!-- ==================== 历史账单 ==================== -->
+        <h3>历史账单</h3>
+        <p v-if="transactions.length === 0" class="empty">暂无账单</p>
+
+        <ul v-else>
+            <li v-for="transaction in transactions" :key="transaction.id">
+                <span>
+                    [{{ transaction.t_type }}]
+                    {{ transaction.category }}:
+                    ¥{{ formatMoney(transaction.amount) }}
+                </span>
+                <button class="delete-btn" @click="deleteTransaction(transaction.id)" :disabled="loading">删除</button>
+            </li>
+        </ul>
+
+        <hr>
+
+        <!-- ==================== 财务报表 ==================== -->
+        <h3>财务报表</h3>
+        <button class="btn-secondary" @click="fetchReport" :disabled="loading">📊 生成分类汇总</button>
+
+        <div v-if="reportData" class="report-box">
+            <strong>{{ reportData.report_type }}</strong>
+
+            <div v-if="Object.keys(reportData.data || {}).length === 0" class="empty" style="margin-top: 10px;">
+                暂无支出数据
+            </div>
+
+            <div v-else v-for="(amount, category) in reportData.data" :key="category" style="margin-top: 8px;">
+                🔹 {{ category }}: ¥{{ formatMoney(amount) }}
+            </div>
+        </div>
+
+        <div v-if="errorMessage" class="message error">{{ errorMessage }}</div>
+        <div v-if="successMessage" class="message success">{{ successMessage }}</div>
+    </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+// ============================================================
+// 1. 基础配置
+// ============================================================
+const API_BASE_URL = "http://127.0.0.1:8000";
+const TOKEN_KEY = "token";
+const USERNAME_KEY = "username";
+
+createApp({
+    setup() {
+        // ====================================================
+        // 2. 状态
+        // ====================================================
+        const token = ref(localStorage.getItem(TOKEN_KEY) || ""); //基础配置定义了TOKEN_KEY
+        //localStorage 存数据是键值对形式
+        const currentUsername = ref(localStorage.getItem(USERNAME_KEY) || "");
+
+        // 不再单独保存 isLoggedIn，避免 token 和登录状态不同步。
+        const isLoggedIn = computed(() => Boolean(token.value));
+
+        const authUsername = ref("");
+        const authPassword = ref("");
+
+        const transactions = ref([]);
+        const newAmount = ref("");
+        const newCategory = ref("");
+        const reportData = ref(null);
+
+        const loading = ref(false);
+        const errorMessage = ref("");
+        const successMessage = ref("");
+
+        // ====================================================
+        // 3. 通用工具
+        // ====================================================
+        const clearMessages = () => {
+            errorMessage.value = "";
+            successMessage.value = "";
+        };
+
+        const formatMoney = (value) => {
+            const number = Number(value);
+            return Number.isFinite(number) ? number.toFixed(2) : "0.00";
+        };
+
+        const saveLoginInfo = (accessToken, username) => {
+            token.value = accessToken;
+            currentUsername.value = username;
+            localStorage.setItem(TOKEN_KEY, accessToken);
+            localStorage.setItem(USERNAME_KEY, username);
+        };
+
+        const logout = () => {
+            token.value = "";
+            currentUsername.value = "";
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USERNAME_KEY);
+            transactions.value = [];
+            reportData.value = null;
+            authPassword.value = "";
+            clearMessages();
+        };
+
+        // ====================================================
+        // 4. 统一请求函数
+        // ====================================================
+        // 所有“需要登录”的 API 都经过这里：
+        // 自动带 Bearer Token、统一处理 HTTP 错误、统一处理 401。
+        const apiFetch = async (path, options = {}) => {
+            const headers = new Headers(options.headers || {});
+
+            if (token.value) {
+                headers.set("Authorization", `Bearer ${token.value}`);
+            }
+
+            const response = await fetch(`${API_BASE_URL}${path}`, {
+                ...options,//把调用方传进来的配置（method、body 等）展开
+                headers
+            });
+
+            if (response.status === 401) {
+                logout();
+                throw new Error("登录已失效，请重新登录");
+            }
+
+            let data = null;
+            //能解析成 JSON 就用，解析不了就当 null。
+            try {
+                data = await response.json();
+            } catch {
+                data = null;
+            }
+
+            if (!response.ok) {
+                throw new Error(
+                    data?.detail || `请求失败：HTTP ${response.status}`
+                );
+            }
+
+            return data;
+        };
+
+        // ====================================================
+        // 5. 注册
+        // ====================================================
+        const register = async () => {
+            clearMessages();
+
+            if (!authUsername.value || !authPassword.value) {
+                errorMessage.value = "账号和密码不能为空";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                const data = await apiFetch("/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: authUsername.value,
+                        password: authPassword.value
+                    })
+                });
+
+                successMessage.value = data.message || "注册成功";
+                authPassword.value = "";
+            } catch (error) {
+                errorMessage.value = error.message || "注册失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // ====================================================
+        // 6. 登录
+        // ====================================================
+        const login = async () => {
+            clearMessages();
+
+            if (!authUsername.value || !authPassword.value) {
+                errorMessage.value = "账号和密码不能为空";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                // OAuth2PasswordRequestForm 要求表单格式，而不是 JSON。
+                const formData = new URLSearchParams();
+                formData.append("username", authUsername.value);
+                formData.append("password", authPassword.value);
+
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    body: formData
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        data?.detail || `登录失败：HTTP ${response.status}`
+                    );
+                }
+
+                saveLoginInfo(data.access_token, authUsername.value);
+                authPassword.value = "";
+
+                await fetchTransactions();
+                successMessage.value = "登录成功";
+            } catch (error) {
+                errorMessage.value = error.message || "登录失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // ====================================================
+        // 7. 获取账单
+        // ====================================================
+        const fetchTransactions = async () => {
+            const data = await apiFetch("/transactions");
+            transactions.value = data || []; //transactions.value这个才是数组，transaction相当于保险箱
+            return transactions.value;
+        };
+
+        // ====================================================
+        // 8. 新增账单
+        // ====================================================
+        const addTransaction = async () => {
+            clearMessages();
+
+            if (newAmount.value === "" || !newCategory.value) {
+                errorMessage.value = "金额和分类不能为空";
+                return;
+            }
+
+            const amount = Number(newAmount.value);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                errorMessage.value = "请输入有效的金额";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                await apiFetch("/transactions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        amount,
+                        category: newCategory.value,
+                        t_type: "支出"
+                    })
+                });
+
+                newAmount.value = "";
+                newCategory.value = "";
+                reportData.value = null;
+
+                await fetchTransactions();
+                successMessage.value = "记账成功";
+            } catch (error) {
+                errorMessage.value = error.message || "记账失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // ====================================================
+        // 9. 删除账单
+        // ====================================================
+        const deleteTransaction = async (id) => {
+            if (!confirm(`确定要删除 ID 为 ${id} 的账单吗？`)) {
+                return;
+            }
+
+            clearMessages();
+            loading.value = true;
+
+            try {
+                await apiFetch(`/transactions/${id}`, {
+                    method: "DELETE"
+                });
+
+                reportData.value = null;
+                await fetchTransactions();
+                successMessage.value = "删除成功";
+            } catch (error) {
+                errorMessage.value = error.message || "删除失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // ====================================================
+        // 10. 获取报表
+        // ====================================================
+        const fetchReport = async () => {
+            clearMessages();
+            loading.value = true;
+
+            try {
+                reportData.value = await apiFetch("/transactions/report");
+            } catch (error) {
+                errorMessage.value = error.message || "获取报表失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // ====================================================
+        // 11. 页面初始化
+        // ====================================================
+        onMounted(async () => {
+            if (!token.value) {
+                return;
+            }
+
+            try {
+                await fetchTransactions();
+            } catch (error) {
+                errorMessage.value = error.message || "获取账单失败";
+            }
+        });
+
+        // ====================================================
+        // 12. 暴露给 HTML
+        // ====================================================
+        return {
+            isLoggedIn,
+            currentUsername,
+            authUsername,
+            authPassword,
+            transactions,
+            newAmount,
+            newCategory,
+            reportData,
+            loading,
+            errorMessage,
+            successMessage,
+            register,
+            login,
+            logout,
+            addTransaction,
+            deleteTransaction,
+            fetchTransactions,
+            fetchReport,
+            formatMoney
+        };
+    }
+}).mount("#app");
+</script>
+</body>
+</html>
