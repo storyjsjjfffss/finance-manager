@@ -310,6 +310,30 @@ def get_all_transactions(
 # ============================================================
 # 14. R — Read：按 ID 查询当前用户的一条账单
 # ============================================================
+@app.get("/transactions/report")
+def generate_report(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    expense_summary: dict[str, float] = {}
+
+    transactions = session.exec(
+        select(Transaction).where(
+            Transaction.user_id == current_user.id
+        )
+    ).all()
+
+    for transaction in transactions:
+        if transaction.t_type == "支出":
+            expense_summary[transaction.category] = (
+                expense_summary.get(transaction.category, 0.0)
+                + transaction.amount
+            )
+
+    return {
+        "report_type": "支出汇总",
+        "data": expense_summary,
+    }
 
 @app.get("/transactions/{t_id}")
 def get_transaction(
@@ -407,30 +431,7 @@ def delete_transaction(
 # 17. 报表：当前用户支出分类汇总
 # ============================================================
 
-@app.get("/transactions/report")
-def generate_report(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-):
-    expense_summary: dict[str, float] = {}
-
-    transactions = session.exec(
-        select(Transaction).where(
-            Transaction.user_id == current_user.id
-        )
-    ).all()
-
-    for transaction in transactions:
-        if transaction.t_type == "支出":
-            expense_summary[transaction.category] = (
-                expense_summary.get(transaction.category, 0.0)
-                + transaction.amount
-            )
-
-    return {
-        "report_type": "支出汇总",
-        "data": expense_summary,
-    }
+#转移到GET /transactions/id之前了
 
 
 # ============================================================

@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极简财务管家 - 完整 CRUD</title>
+    <!-- 引入外部字体，提升质感 -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --secondary: #6B7280;
+            --secondary-hover: #4B5563;
+            --danger: #EF4444;
+            --danger-hover: #DC2626;
+            --warning: #F59E0B;
+            --warning-hover: #D97706;
+            --bg-color: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text-main: #111827;
+            --text-muted: #6B7280;
+            --border-color: #E5E7EB;
+            --success: #10B981;
+            --success-bg: #D1FAE5;
+            --error-bg: #FEE2E2;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #f6f8fd 0%, #eef2fa 100%);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem 1rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* 卡片式设计 */
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            transition: all 0.3s ease;
+        }
+
+        h2, h3 {
+            margin-top: 0;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        h2 { font-size: 1.5rem; margin-bottom: 1.5rem; }
+        h3 { font-size: 1.25rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border-color); }
+
+        /* 表单控件组合 */
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 1.2rem;
+            flex-wrap: wrap;
+        }
+
+        input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+            background-color: #F9FAFB;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background-color: #FFF;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+
+        /* 按钮美化 */
+        button {
+            padding: 10px 18px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.2);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary { background: var(--secondary); }
+        .btn-secondary:hover:not(:disabled) { background: var(--secondary-hover); box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2); }
+
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover:not(:disabled) { background: var(--danger-hover); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+
+        .btn-edit { background: var(--warning); color: #fff; }
+        .btn-edit:hover:not(:disabled) { background: var(--warning-hover); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
+
+        /* 头部布局 */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 2rem;
+        }
+
+        .user-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #EEF2FF;
+            color: var(--primary);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        /* 账单列表 */
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            background: #FFF;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            margin-bottom: 12px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        li:hover {
+            border-color: #D1D5DB;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .transaction-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .t-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .t-type {
+            background: #F3F4F6;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .t-category {
+            font-weight: 500;
+            font-size: 1.1rem;
+        }
+
+        .t-amount {
+            color: var(--danger);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .actions button {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        /* 编辑框 */
+        .edit-box {
+            background: #F8FAFC;
+            border: 1px dashed #CBD5E1;
+            padding: 16px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .edit-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* 报表区域 */
+        .report-box {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .report-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #E2E8F0;
+        }
+
+        .report-item:last-child {
+            border-bottom: none;
+        }
+
+        /* 消息提示 */
+        .message {
+            margin-top: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .error { background: var(--error-bg); color: var(--danger); border: 1px solid #FECACA; }
+        .success { background: var(--success-bg); color: var(--success); border: 1px solid #A7F3D0; }
+        .muted { color: var(--text-muted); font-size: 0.95rem; text-align: center; padding: 2rem 0; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 授权居中布局 */
+        .auth-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .auth-card .input-group {
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+
+        .auth-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .auth-actions button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+        }
+
+        #trailCanvas {
+            position: fixed; /* 固定在屏幕上 */
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none; /* 核心技巧：鼠标事件穿透，绝不影响下面按钮的点击 */
+            z-index: 9999; /* 保证在最顶层 */
+        }
+    </style>
+</head>
+
+<body>
+<!-- 添加这一行作为全屏画布 -->
+<canvas id="trailCanvas"></canvas>
+
+<div id="app" class="container">
+
+
+
+    <!-- ====================================================== -->
+    <!-- 1. 未登录 -->
+    <!-- ====================================================== -->
+
+    <div v-if="!isLoggedIn" class="auth-wrapper">
+        <div class="card auth-card">
+            <h2>✨ 极简财务管家</h2>
+            <p style="color: var(--text-muted); margin-bottom: 24px;">记录生活，理清每一笔财富</p>
+
+            <div class="input-group">
+                <input
+                    type="text"
+                    v-model.trim="authUsername"
+                    placeholder="用户名"
+                >
+                <input
+                    type="password"
+                    v-model="authPassword"
+                    placeholder="密码"
+                    @keyup.enter="login"
+                >
+            </div>
+
+            <div class="auth-actions">
+                <button @click="login" :disabled="loading">
+                    🔑 登录系统
+                </button>
+
+                <button
+                    class="btn-secondary"
+                    @click="register"
+                    :disabled="loading"
+                >
+                    📝 注册新账号
+                </button>
+            </div>
+
+            <div v-if="errorMessage" class="message error">
+                ⚠️ {{ errorMessage }}
+            </div>
+
+            <div v-if="successMessage" class="message success">
+                ✅ {{ successMessage }}
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- 2. 已登录 -->
+    <!-- ====================================================== -->
+
+    <div v-else>
+
+        <!-- 头部信息 -->
+        <div class="card">
+            <div class="app-header">
+                <div>
+                    <h2>💰 财务控制台</h2>
+                    <div class="user-badge">
+                        👤 {{ currentUsername }}
+                    </div>
+                </div>
+
+                <button class="btn-danger" @click="logout" style="padding: 8px 12px; font-size: 0.85rem;">
+                    🚪 退出登录
+                </button>
+            </div>
+
+            <!-- C：Create 新增 -->
+            <div class="add-section">
+                <h3>新增一笔账单</h3>
+                <div class="input-group">
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        v-model.number="newAmount"
+                        placeholder="金额 (例如 50)"
+                    >
+                    <input
+                        type="text"
+                        v-model.trim="newCategory"
+                        placeholder="分类 (例如 餐饮、交通)"
+                    >
+                    <button @click="addTransaction" :disabled="loading" style="min-width: 120px;">
+                        ➕ 记一笔
+                    </button>
+                </div>
+            </div>
+
+            <div v-if="errorMessage" class="message error">
+                {{ errorMessage }}
+            </div>
+            <div v-if="successMessage" class="message success">
+                {{ successMessage }}
+            </div>
+        </div>
+
+
+        <!-- R：Read 查询 -->
+        <div class="card">
+            <h3>历史账单明细</h3>
+
+            <p v-if="transactions.length === 0" class="muted">
+                📭 暂无账单记录，开始记下你的第一笔花销吧！
+            </p>
+
+            <ul v-else>
+                <li
+                    v-for="t in transactions"
+                    :key="t.id"
+                >
+                    <!-- 普通显示状态 -->
+                    <div v-if="editingId !== t.id" class="transaction-row">
+                        <div class="t-info">
+                            <span class="t-type">{{ t.t_type }}</span>
+                            <span class="t-category">{{ t.category }}</span>
+                            <span class="t-amount">- ¥{{ formatMoney(t.amount) }}</span>
+                            <small style="color: #9CA3AF; margin-left: 8px;">#{{ t.id }}</small>
+                        </div>
+
+                        <div class="actions">
+                            <button
+                                class="btn-edit"
+                                @click="startEdit(t)"
+                            >
+                                ✏️ 编辑
+                            </button>
+
+                            <button
+                                class="btn-danger"
+                                @click="deleteTransaction(t.id)"
+                                :disabled="loading"
+                            >
+                                🗑 删除
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- U：Update 编辑状态 -->
+                    <div v-else class="edit-box">
+                        <div style="font-weight: 500; margin-bottom: 8px; color: var(--primary);">正在编辑账单 #{{ t.id }}</div>
+                        <div class="input-group" style="margin-bottom: 0;">
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                v-model.number="editAmount"
+                                placeholder="修改金额"
+                            >
+                            <input
+                                type="text"
+                                v-model.trim="editCategory"
+                                placeholder="修改分类"
+                            >
+                        </div>
+
+                        <div class="edit-actions">
+                            <button
+                                @click="updateTransaction(t.id)"
+                                :disabled="loading"
+                            >
+                                💾 保存修改
+                            </button>
+
+                            <button
+                                class="btn-secondary"
+                                @click="cancelEdit"
+                                :disabled="loading"
+                            >
+                                ❌ 取消
+                            </button>
+                        </div>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+
+        <!-- Report -->
+        <div class="card">
+            <h3>财务报表分析</h3>
+
+            <button
+                @click="fetchReport"
+                :disabled="loading"
+                style="background: #0284C7;"
+            >
+                📊 生成分类汇总报表
+            </button>
+
+            <div v-if="reportData" class="report-box">
+                <div style="font-weight: 600; font-size: 1.1rem; margin-bottom: 1rem; color: #334155;">
+                    📋 {{ reportData.report_type }}
+                </div>
+
+                <div
+                    v-if="Object.keys(reportData.data || {}).length === 0"
+                    class="muted"
+                >
+                    本期暂无支出数据
+                </div>
+
+                <div v-else>
+                    <div
+                        v-for="(amount, category) in reportData.data"
+                        :key="category"
+                        class="report-item"
+                    >
+                        <span style="font-weight: 500;">{{ category }}</span>
+                        <span style="font-weight: 600; color: var(--danger);">¥{{ formatMoney(amount) }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+// ============================================================
+// 1. 基础配置
+// ============================================================
+const API_BASE_URL = "http://127.0.0.1:8000";
+const TOKEN_KEY = "token";
+const USERNAME_KEY = "username";
+
+createApp({
+    setup() {
+        // =====================================================
+        // 2. 登录状态
+        // =====================================================
+        const token = ref(localStorage.getItem(TOKEN_KEY) || "");
+        const currentUsername = ref(localStorage.getItem(USERNAME_KEY) || "");
+        const isLoggedIn = computed(() => Boolean(token.value));
+        const authUsername = ref("");
+        const authPassword = ref("");
+
+        // =====================================================
+        // 3. 账单状态
+        // =====================================================
+        const transactions = ref([]);
+        const newAmount = ref("");
+        const newCategory = ref("");
+        const reportData = ref(null);
+        const editingId = ref(null);
+        const editAmount = ref("");
+        const editCategory = ref("");
+        const loading = ref(false);
+        const errorMessage = ref("");
+        const successMessage = ref("");
+
+        // =====================================================
+        // 4. 工具函数
+        // =====================================================
+        const clearMessages = () => {
+            errorMessage.value = "";
+            successMessage.value = "";
+        };
+
+        const formatMoney = (value) => {
+            const number = Number(value);
+            return Number.isNaN(number) ? "0.00" : number.toFixed(2);
+        };
+
+        const saveLoginInfo = (accessToken, username) => {
+            token.value = accessToken;
+            currentUsername.value = username;
+            localStorage.setItem(TOKEN_KEY, accessToken);
+            localStorage.setItem(USERNAME_KEY, username);
+        };
+
+        const logout = () => {
+            token.value = "";
+            currentUsername.value = "";
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USERNAME_KEY);
+            transactions.value = [];
+            reportData.value = null;
+            editingId.value = null;
+            authPassword.value = "";
+            clearMessages();
+        };
+
+        // =====================================================
+        // 5. 统一请求函数
+        // =====================================================
+        const apiFetch = async (path, options = {}) => {
+            const headers = new Headers(options.headers || {});
+            if (token.value) {
+                headers.set("Authorization", `Bearer ${token.value}`);
+            }
+
+            const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+
+            if (response.status === 401) {
+                logout();
+                throw new Error("登录已失效，请重新登录");
+            }
+
+            let data = null;
+            try { data = await response.json(); } catch { data = null; }
+
+            if (!response.ok) {
+                throw new Error(data?.detail || `请求失败：HTTP ${response.status}`);
+            }
+            return data;
+        };
+
+        // =====================================================
+        // 6. 注册
+        // =====================================================
+        const register = async () => {
+            clearMessages();
+            if (!authUsername.value || !authPassword.value) {
+                errorMessage.value = "账号密码不能为空";
+                return;
+            }
+            loading.value = true;
+            try {
+                const data = await apiFetch("/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: authUsername.value, password: authPassword.value })
+                });
+                successMessage.value = data.message || "注册成功";
+                authPassword.value = "";
+            } catch (error) {
+                errorMessage.value = error.message || "注册失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // =====================================================
+        // 7. 登录
+        // =====================================================
+        const login = async () => {
+            clearMessages();
+            if (!authUsername.value || !authPassword.value) {
+                errorMessage.value = "账号密码不能为空";
+                return;
+            }
+            loading.value = true;
+            try {
+                const formData = new URLSearchParams();
+                formData.append("username", authUsername.value);
+                formData.append("password", authPassword.value);
+
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData
+                });
+
+                let data = null;
+                try { data = await response.json(); } catch { data = null; }
+
+                if (!response.ok) {
+                    throw new Error(data?.detail || `登录失败：HTTP ${response.status}`);
+                }
+
+                saveLoginInfo(data.access_token, authUsername.value);
+                authPassword.value = "";
+                await fetchTransactions();
+                successMessage.value = "登录成功";
+            } catch (error) {
+                errorMessage.value = error.message || "登录失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // =====================================================
+        // 8. R：查询全部账单
+        // =====================================================
+        const fetchTransactions = async () => {
+            const data = await apiFetch("/transactions");
+            transactions.value = data || [];
+        };
+
+        // =====================================================
+        // 9. C：新增账单
+        // =====================================================
+        const addTransaction = async () => {
+            clearMessages();
+            if (newAmount.value === "" || !newCategory.value) {
+                errorMessage.value = "金额和分类不能为空";
+                return;
+            }
+            const amount = Number(newAmount.value);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                errorMessage.value = "请输入有效金额";
+                return;
+            }
+            loading.value = true;
+            try {
+                await apiFetch("/transactions", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount, category: newCategory.value, t_type: "支出" })
+                });
+                newAmount.value = "";
+                newCategory.value = "";
+                reportData.value = null;
+                await fetchTransactions();
+                successMessage.value = "账单创建成功";
+            } catch (error) {
+                errorMessage.value = error.message || "创建失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // =====================================================
+        // 10. U：进入编辑状态
+        // =====================================================
+        const startEdit = (transaction) => {
+            clearMessages();
+            editingId.value = transaction.id;
+            editAmount.value = transaction.amount;
+            editCategory.value = transaction.category;
+        };
+
+        const cancelEdit = () => {
+            editingId.value = null;
+            editAmount.value = "";
+            editCategory.value = "";
+        };
+
+        // =====================================================
+        // 11. U：真正发送 PUT 修改账单
+        // =====================================================
+        const updateTransaction = async (id) => {
+            clearMessages();
+            if (!editCategory.value) {
+                errorMessage.value = "分类不能为空";
+                return;
+            }
+            const amount = Number(editAmount.value);
+            if (!Number.isFinite(amount) || amount <= 0) {
+                errorMessage.value = "请输入有效金额";
+                return;
+            }
+            loading.value = true;
+            try {
+                await apiFetch(`/transactions/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount, category: editCategory.value, t_type: "支出" })
+                });
+                cancelEdit();
+                reportData.value = null;
+                await fetchTransactions();
+                successMessage.value = "账单修改成功";
+            } catch (error) {
+                errorMessage.value = error.message || "修改失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // =====================================================
+        // 12. D：删除账单
+        // =====================================================
+        const deleteTransaction = async (id) => {
+            if (!confirm(`确定删除 ID 为 ${id} 的账单吗？`)) return;
+            clearMessages();
+            loading.value = true;
+            try {
+                await apiFetch(`/transactions/${id}`, { method: "DELETE" });
+                reportData.value = null;
+                await fetchTransactions();
+                successMessage.value = "账单删除成功";
+            } catch (error) {
+                errorMessage.value = error.message || "删除失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // =====================================================
+        // 13. Report
+        // =====================================================
+        const fetchReport = async () => {
+            clearMessages();
+            loading.value = true;
+            try {
+                reportData.value = await apiFetch("/transactions/report");
+            } catch (error) {
+                errorMessage.value = error.message || "获取报表失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        // =====================================================
+        // 14. 页面刷新后的登录恢复
+        // =====================================================
+        onMounted(async () => {
+            if (!token.value) return;
+            try {
+                await fetchTransactions();
+            } catch (error) {
+                errorMessage.value = error.message || "恢复登录失败";
+            }
+        });
+
+        return {
+            isLoggedIn, currentUsername, authUsername, authPassword,
+            transactions, newAmount, newCategory, reportData,
+            editingId, editAmount, editCategory, loading, errorMessage, successMessage,
+            register, login, logout, fetchTransactions, addTransaction,
+            startEdit, cancelEdit, updateTransaction, deleteTransaction, fetchReport, formatMoney,
+        };
+    }
+}).mount("#app");
+</script>
+
+<script>
+// ============================================================
+// Canvas 鼠标拖尾特效 (独立于 Vue 业务逻辑)
+// ============================================================
+(function initMouseTrail() {
+    const canvas = document.getElementById('trailCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 动态调整画布尺寸，保持与窗口一致
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    window.addEventListener('resize', () => {
+        width = canvas.width = window.innerWidth;
+        height = canvas.height = window.innerHeight;
+    });
+
+    // 存储鼠标历史轨迹的点
+    const points = [];
+    const maxAge = 25; // 粒子的存活时间（帧数），越大拖尾越长
+
+    // 监听鼠标移动，不断把新坐标推入数组
+    window.addEventListener('mousemove', (e) => {
+        points.push({
+            x: e.clientX,
+            y: e.clientY,
+            age: 0
+        });
+    });
+
+    // 主渲染循环
+    function render() {
+        // 每一帧清空整个画布
+        ctx.clearRect(0, 0, width, height);
+
+        // 遍历所有存活的轨迹点
+        for (let i = 0; i < points.length; i++) {
+            const p = points[i];
+            p.age++; // 增加点的年龄
+
+            // 计算生命周期进度 (0 到 1)
+            const progress = p.age / maxAge;
+
+            // 越老的点，半径越小 (从 8 缩小到 0)
+            const radius = 8 * (1 - progress);
+            // 越老的点，透明度越低
+            const alpha = 1 - progress;
+
+            // 开始绘制这个点
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, Math.max(0, radius), 0, Math.PI * 2);
+            // 使用我们界面的主题色 #4F46E5 (RGB: 79, 70, 229)
+            ctx.fillStyle = `rgba(79, 70, 229, ${alpha})`;
+            ctx.fill();
+        }
+
+        // 把已经“老死”（年龄超过 maxAge）的点从数组开头剔除，防止内存泄漏
+        while (points.length && points[0].age >= maxAge) {
+            points.shift();
+        }
+
+        // 告诉浏览器在下一帧继续执行 render
+        requestAnimationFrame(render);
+    }
+
+    // 启动动画循环
+    render();
+})();
+</script>
+</body>
+</html>

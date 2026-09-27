@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极简财务管家 - 完整 CRUD</title>
+
+    <style>
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            padding: 20px;
+            max-width: 760px;
+            margin: auto;
+        }
+
+        .auth-box,
+        .app-box {
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        input {
+            padding: 8px;
+            margin: 4px 8px 4px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 8px 15px;
+            margin: 4px;
+            background: #42b983;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+        }
+
+        .btn-edit {
+            background: #0d6efd;
+        }
+
+        li {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .transaction-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .report-box {
+            margin-top: 15px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 8px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .message {
+            margin-top: 10px;
+        }
+
+        .error {
+            color: #dc3545;
+        }
+
+        .success {
+            color: #198754;
+        }
+
+        .muted {
+            color: #777;
+        }
+
+        .edit-box {
+            margin-top: 10px;
+            padding: 10px;
+            background: #eef6ff;
+            border-radius: 6px;
+        }
+    </style>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+
+<body>
+<div id="app">
+
+    <!-- ====================================================== -->
+    <!-- 1. 未登录 -->
+    <!-- ====================================================== -->
+
+    <div v-if="!isLoggedIn" class="auth-box">
+        <h2>🔒 欢迎，请先登录</h2>
+
+        <div class="input-group">
+            <input
+                type="text"
+                v-model.trim="authUsername"
+                placeholder="用户名"
+            >
+
+            <input
+                type="password"
+                v-model="authPassword"
+                placeholder="密码"
+                @keyup.enter="login"
+            >
+        </div>
+
+        <button @click="login" :disabled="loading">
+            🔑 登录
+        </button>
+
+        <button
+            class="btn-secondary"
+            @click="register"
+            :disabled="loading"
+        >
+            📝 注册新账号
+        </button>
+
+        <div v-if="errorMessage" class="message error">
+            {{ errorMessage }}
+        </div>
+
+        <div v-if="successMessage" class="message success">
+            {{ successMessage }}
+        </div>
+    </div>
+
+
+    <!-- ====================================================== -->
+    <!-- 2. 已登录 -->
+    <!-- ====================================================== -->
+
+    <div v-else class="app-box">
+
+        <div class="header">
+            <div>
+                <h2>💰 我的财务管家</h2>
+                <div>当前用户：<strong>{{ currentUsername }}</strong></div>
+            </div>
+
+            <button class="btn-danger" @click="logout">
+                🚪 退出登录
+            </button>
+        </div>
+
+
+        <!-- ================================================== -->
+        <!-- C：Create 新增 -->
+        <!-- ================================================== -->
+
+        <div class="input-group" style="margin-top: 20px;">
+            <h3>新增账单</h3>
+
+            <input
+                type="number"
+                min="0"
+                step="0.01"
+                v-model.number="newAmount"
+                placeholder="金额，例如 50"
+            >
+
+            <input
+                type="text"
+                v-model.trim="newCategory"
+                placeholder="分类，例如 餐饮"
+            >
+
+            <button @click="addTransaction" :disabled="loading">
+                ➕ 记一笔
+            </button>
+        </div>
+
+
+        <!-- ================================================== -->
+        <!-- R：Read 查询 -->
+        <!-- ================================================== -->
+
+        <h3>历史账单</h3>
+
+        <p v-if="transactions.length === 0" class="muted">
+            暂无账单
+        </p>
+
+        <ul v-else>
+            <li
+                v-for="t in transactions"
+                :key="t.id"
+            >
+                <!-- 普通显示状态 -->
+                <div v-if="editingId !== t.id" class="transaction-row">
+                    <span>
+                        [{{ t.t_type }}]
+                        {{ t.category }}:
+                        ¥{{ formatMoney(t.amount) }}
+                        <small class="muted">（ID: {{ t.id }}）</small>
+                    </span>
+
+                    <span class="actions">
+                        <button
+                            class="btn-edit"
+                            @click="startEdit(t)"
+                        >
+                            ✏️ 编辑
+                        </button>
+
+                        <button
+                            class="btn-danger"
+                            @click="deleteTransaction(t.id)"
+                            :disabled="loading"
+                        >
+                            🗑 删除
+                        </button>
+                    </span>
+                </div>
+
+
+                <!-- U：Update 编辑状态 -->
+                <div v-else class="edit-box">
+                    <div>
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            v-model.number="editAmount"
+                        >
+
+                        <input
+                            type="text"
+                            v-model.trim="editCategory"
+                        >
+                    </div>
+
+                    <button
+                        @click="updateTransaction(t.id)"
+                        :disabled="loading"
+                    >
+                        💾 保存修改
+                    </button>
+
+                    <button
+                        class="btn-secondary"
+                        @click="cancelEdit"
+                        :disabled="loading"
+                    >
+                        取消
+                    </button>
+                </div>
+            </li>
+        </ul>
+
+
+        <hr>
+
+
+        <!-- ================================================== -->
+        <!-- Report -->
+        <!-- ================================================== -->
+
+        <h3>财务报表</h3>
+
+        <button
+            class="btn-secondary"
+            @click="fetchReport"
+            :disabled="loading"
+        >
+            📊 生成分类汇总
+        </button>
+
+        <div v-if="reportData" class="report-box">
+            <strong>{{ reportData.report_type }}</strong>
+
+            <div
+                v-if="Object.keys(reportData.data || {}).length === 0"
+                class="muted"
+                style="margin-top: 10px;"
+            >
+                暂无支出数据
+            </div>
+
+            <div
+                v-else
+                v-for="(amount, category) in reportData.data"
+                :key="category"
+                style="margin-top: 8px;"
+            >
+                🔹 {{ category }}：¥{{ formatMoney(amount) }}
+            </div>
+        </div>
+
+
+        <div v-if="errorMessage" class="message error">
+            {{ errorMessage }}
+        </div>
+
+        <div v-if="successMessage" class="message success">
+            {{ successMessage }}
+        </div>
+
+    </div>
+</div>
+
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+
+// ============================================================
+// 1. 基础配置
+// ============================================================
+
+const API_BASE_URL = "http://127.0.0.1:8000";
+const TOKEN_KEY = "token";
+const USERNAME_KEY = "username";
+
+
+createApp({
+    setup() {
+
+        // =====================================================
+        // 2. 登录状态
+        // =====================================================
+
+        const token = ref(
+            localStorage.getItem(TOKEN_KEY) || ""
+        );
+
+        const currentUsername = ref(
+            localStorage.getItem(USERNAME_KEY) || ""
+        );
+
+        const isLoggedIn = computed(() => {
+            return Boolean(token.value);
+        });
+
+        const authUsername = ref("");
+        const authPassword = ref("");
+
+
+        // =====================================================
+        // 3. 账单状态
+        // =====================================================
+
+        const transactions = ref([]);
+
+        const newAmount = ref("");
+        const newCategory = ref("");
+
+        const reportData = ref(null);
+
+        // 当前正在编辑哪一条账单
+        const editingId = ref(null);
+
+        const editAmount = ref("");
+        const editCategory = ref("");
+
+        const loading = ref(false);
+        const errorMessage = ref("");
+        const successMessage = ref("");
+
+
+        // =====================================================
+        // 4. 工具函数
+        // =====================================================
+
+        const clearMessages = () => {
+            errorMessage.value = "";
+            successMessage.value = "";
+        };
+
+
+        const formatMoney = (value) => {
+            const number = Number(value);
+
+            if (Number.isNaN(number)) {
+                return "0.00";
+            }
+
+            return number.toFixed(2);
+        };
+
+
+        const saveLoginInfo = (accessToken, username) => {
+            token.value = accessToken;
+            currentUsername.value = username;
+
+            localStorage.setItem(
+                TOKEN_KEY,
+                accessToken
+            );
+
+            localStorage.setItem(
+                USERNAME_KEY,
+                username
+            );
+        };
+
+
+        const logout = () => {
+            token.value = "";
+            currentUsername.value = "";
+
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(USERNAME_KEY);
+
+            transactions.value = [];
+            reportData.value = null;
+            editingId.value = null;
+
+            authPassword.value = "";
+            clearMessages();
+        };
+
+
+        // =====================================================
+        // 5. 统一请求函数
+        // =====================================================
+
+        const apiFetch = async (path, options = {}) => {
+            const headers = new Headers(
+                options.headers || {}
+            );
+
+            if (token.value) {
+                headers.set(
+                    "Authorization",
+                    `Bearer ${token.value}`
+                );
+            }
+
+            const response = await fetch(
+                `${API_BASE_URL}${path}`,
+                {
+                    ...options,
+                    headers
+                }
+            );
+
+            if (response.status === 401) {
+                logout();
+                throw new Error("登录已失效，请重新登录");
+            }
+
+            let data = null;
+
+            try {
+                data = await response.json();
+            } catch {
+                data = null;
+            }
+
+            if (!response.ok) {
+                throw new Error(
+                    data?.detail ||
+                    `请求失败：HTTP ${response.status}`
+                );
+            }
+
+            return data;
+        };
+
+
+        // =====================================================
+        // 6. 注册
+        // =====================================================
+
+        const register = async () => {
+            clearMessages();
+
+            if (!authUsername.value || !authPassword.value) {
+                errorMessage.value = "账号密码不能为空";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                const data = await apiFetch(
+                    "/register",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            username: authUsername.value,
+                            password: authPassword.value
+                        })
+                    }
+                );
+
+                successMessage.value = data.message || "注册成功";
+                authPassword.value = "";
+
+            } catch (error) {
+                errorMessage.value = error.message || "注册失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+
+        // =====================================================
+        // 7. 登录
+        // =====================================================
+
+        const login = async () => {
+            clearMessages();
+
+            if (!authUsername.value || !authPassword.value) {
+                errorMessage.value = "账号密码不能为空";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append("username", authUsername.value);
+                formData.append("password", authPassword.value);
+
+                const response = await fetch(
+                    `${API_BASE_URL}/login`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/x-www-form-urlencoded"
+                        },
+                        body: formData
+                    }
+                );
+
+                let data = null;
+
+                try {
+                    data = await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        data?.detail ||
+                        `登录失败：HTTP ${response.status}`
+                    );
+                }
+
+                saveLoginInfo(
+                    data.access_token,
+                    authUsername.value
+                );
+
+                authPassword.value = "";
+
+                await fetchTransactions();
+
+                successMessage.value = "登录成功";
+
+            } catch (error) {
+                errorMessage.value = error.message || "登录失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+
+        // =====================================================
+        // 8. R：查询全部账单
+        // =====================================================
+
+        const fetchTransactions = async () => {
+            const data = await apiFetch("/transactions");
+            transactions.value = data || [];
+        };
+
+
+        // =====================================================
+        // 9. C：新增账单
+        // =====================================================
+
+        const addTransaction = async () => {
+            clearMessages();
+
+            if (
+                newAmount.value === "" ||
+                !newCategory.value
+            ) {
+                errorMessage.value = "金额和分类不能为空";
+                return;
+            }
+
+            const amount = Number(newAmount.value);
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                errorMessage.value = "请输入有效金额";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                await apiFetch(
+                    "/transactions",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            amount,
+                            category: newCategory.value,
+                            t_type: "支出"
+                        })
+                    }
+                );
+
+                newAmount.value = "";
+                newCategory.value = "";
+                reportData.value = null;
+
+                await fetchTransactions();
+
+                successMessage.value = "账单创建成功";
+
+            } catch (error) {
+                errorMessage.value = error.message || "创建失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+
+        // =====================================================
+        // 10. U：进入编辑状态
+        // =====================================================
+
+        const startEdit = (transaction) => {
+            clearMessages();
+
+            editingId.value = transaction.id;
+            editAmount.value = transaction.amount;
+            editCategory.value = transaction.category;
+        };
+
+
+        const cancelEdit = () => {
+            editingId.value = null;
+            editAmount.value = "";
+            editCategory.value = "";
+        };
+
+
+        // =====================================================
+        // 11. U：真正发送 PUT 修改账单
+        // =====================================================
+
+        const updateTransaction = async (id) => {
+            clearMessages();
+
+            if (!editCategory.value) {
+                errorMessage.value = "分类不能为空";
+                return;
+            }
+
+            const amount = Number(editAmount.value);
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+                errorMessage.value = "请输入有效金额";
+                return;
+            }
+
+            loading.value = true;
+
+            try {
+                await apiFetch(
+                    `/transactions/${id}`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            amount,
+                            category: editCategory.value,
+                            t_type: "支出"
+                        })
+                    }
+                );
+
+                cancelEdit();
+                reportData.value = null;
+
+                await fetchTransactions();
+
+                successMessage.value = "账单修改成功";
+
+            } catch (error) {
+                errorMessage.value = error.message || "修改失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+
+        // =====================================================
+        // 12. D：删除账单
+        // =====================================================
+
+        const deleteTransaction = async (id) => {
+            if (!confirm(`确定删除 ID 为 ${id} 的账单吗？`)) {
+                return;
+            }
+
+            clearMessages();
+            loading.value = true;
+
+            try {
+                await apiFetch(
+                    `/transactions/${id}`,
+                    {
+                        method: "DELETE"
+                    }
+                );
+
+                reportData.value = null;
+                await fetchTransactions();
+
+                successMessage.value = "账单删除成功";
+
+            } catch (error) {
+                errorMessage.value = error.message || "删除失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+
+        // =====================================================
+        // 13. Report
+        // =====================================================
+
+        const fetchReport = async () => {
+            clearMessages();
+            loading.value = true;
+
+            try {
+                reportData.value = await apiFetch(
+                    "/transactions/report"
+                );
+            } catch (error) {
+                errorMessage.value = error.message || "获取报表失败";
+            } finally {
+                loading.value = false;
+            }
+        };
+
+
+        // =====================================================
+        // 14. 页面刷新后的登录恢复
+        // =====================================================
+
+        onMounted(async () => {
+            if (!token.value) {
+                return;
+            }
+
+            try {
+                await fetchTransactions();
+            } catch (error) {
+                errorMessage.value = error.message || "恢复登录失败";
+            }
+        });
+
+
+        return {
+            isLoggedIn,
+            currentUsername,
+            authUsername,
+            authPassword,
+
+            transactions,
+            newAmount,
+            newCategory,
+            reportData,
+
+            editingId,
+            editAmount,
+            editCategory,
+
+            loading,
+            errorMessage,
+            successMessage,
+
+            register,
+            login,
+            logout,
+
+            fetchTransactions,
+            addTransaction,
+            startEdit,
+            cancelEdit,
+            updateTransaction,
+            deleteTransaction,
+            fetchReport,
+            formatMoney,
+        };
+    }
+}).mount("#app");
+</script>
+
+</body>
+</html>

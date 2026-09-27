@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>极简财务管家 - 多用户版</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+        .auth-box, .app-box { padding: 20px; background: #f5f5f5; border-radius: 8px; margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        input { padding: 8px; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; width: 180px; }
+        button { padding: 8px 15px; background: #42b983; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #33996b; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        .btn-danger { background: #dc3545; }
+        .btn-danger:hover { background: #c82333; }
+        li { margin-bottom: 10px; padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;}
+        .delete-btn { background: #dc3545; padding: 4px 8px; font-size: 12px; }
+        .report-box { margin-top: 15px; padding: 15px; background: #e9ecef; border-radius: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body>
+
+    <div id="app">
+        <!-- ========================================== -->
+        <!-- 视图 1：未登录时显示的“安检口” (v-if="!isLoggedIn") -->
+        <!-- ========================================== -->
+        <div v-if="!isLoggedIn" class="auth-box">
+            <h2>🔒 欢迎，请先登录</h2>
+            <div class="input-group">
+                <input type="text" v-model="authUsername" placeholder="用户名">
+                <input type="password" v-model="authPassword" placeholder="密码">
+            </div>
+            <button @click="login">🔑 登录</button>
+            <button class="btn-secondary" @click="register">📝 注册新账号</button>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 视图 2：登录成功后显示的“记账后台” (v-else) -->
+        <!-- ========================================== -->
+        <div v-else class="app-box">
+            <div class="header">
+                <h2>💰 我的财务管家</h2>
+                <button class="btn-danger" @click="logout">🚪 退出登录</button>
+            </div>
+
+            <!-- 记账区域 -->
+            <div class="input-group" style="margin-top: 20px;">
+                <input type="number" v-model="newAmount" placeholder="金额 (如 50)">
+                <input type="text" v-model="newCategory" placeholder="分类 (如 餐饮)">
+                <button @click="addTransaction">记一笔</button>
+            </div>
+
+            <!-- 历史账单 -->
+            <h3>历史账单</h3>
+            <ul>
+                <li v-for="t in transactions" :key="t.id">
+                    <span>[{{ t.t_type }}] {{ t.category }}: ¥{{ t.amount.toFixed(2) }}</span>
+                    <button class="delete-btn" @click="deleteTransaction(t.id)">删除</button>
+                </li>
+            </ul>
+
+            <hr>
+
+            <!-- 报表区域 -->
+            <h3>财务报表</h3>
+            <button class="btn-secondary" @click="fetchReport">📊 生成分类汇总</button>
+
+            <div v-if="reportData" class="report-box">
+                <strong>{{ reportData.report_type }}</strong>
+                <br><br>
+                <div v-for="(amount, category) in reportData.data" :key="category">
+                    🔹 {{ category }}: ¥{{ amount.toFixed(2) }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+        const API_BASE_URL = "http://127.0.0.1:8000";
+
+        createApp({
+            setup() {
+                // === 状态变量 ===
+                const isLoggedIn = ref(false);
+                const token = ref('');
+                const authUsername = ref('');
+                const authPassword = ref('');
+
+                const transactions = ref([]);
+                const newAmount = ref('');
+                const newCategory = ref('');
+                const reportData = ref(null);
+
+                // === 核心魔法 1：获取带有门禁卡(JWT)的请求头 ===
+                // 以后每次发请求，都要调用这个函数把手环带上
+                const getAuthHeaders = () => {
+                    return {
+                        "Content-Type": "application/json",   //这些都是固定的
+                        "Authorization": `Bearer ${token.value}` //`...`	反引号	模板字符串，能换行、能插值
+                    };
+                };
+
+                // === 账号相关功能 ===
+                const register = async () => {
+                    if (!authUsername.value || !authPassword.value) return alert("账号密码不能为空");
+                    const res = await fetch(`${API_BASE_URL}/register`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" }, //application/json	JSON 数据，最常用
+                        body: JSON.stringify({ username: authUsername.value, password: authPassword.value })
+                    });
+                    const data = await res.json();
+                    if (res.ok) alert(data.message);
+                    else alert("注册失败：" + data.detail);
+                };
+
+                //因为 URLSearchParams 本身就在 fetch 支持的 body 类型里，它会自动序列化成 username=alice&password=123。
+
+                const login = async () => {
+                    if (!authUsername.value || !authPassword.value) return alert("账号密码不能为空");
+
+                    // 注意：后端用的 OAuth2PasswordRequestForm 必须接收表单格式 (URLSearchParams)
+                    const formData = new URLSearchParams();
+                    formData.append('username', authUsername.value);
+                    formData.append('password', authPassword.value);
+
+                    const res = await fetch(`${API_BASE_URL}/login`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: formData
+                    });
+
+                    const data = await res.json();
+                    if (res.ok) {
+                        // 核心魔法 2：把门禁卡存进浏览器的本地仓库，刷新网页也不会丢
+                        localStorage.setItem("token", data.access_token);
+                        //localStorage 和它后面的方法不是固定的自定义函数，而是浏览器内置的 API。
+                        // 你不需要 import，也不需要定义，浏览器打开就自带。
+                        token.value = data.access_token;
+                        isLoggedIn.value = true;
+                        authPassword.value = ''; // 清空密码框
+                        fetchTransactions(); // 登录成功后自动拉取账单
+                    } else {
+                        alert("登录失败：" + data.detail);
+                    }
+                };
+
+                const logout = () => {
+                    localStorage.removeItem("token");
+                    token.value = '';
+                    isLoggedIn.value = false;
+                    transactions.value = [];
+                    reportData.value = null;
+                };
+
+                // === 记账相关功能 (全面加装门禁) ===
+                const fetchTransactions = async () => {
+                    const res = await fetch(`${API_BASE_URL}/transactions`, {
+                        headers: getAuthHeaders() // 带上门禁卡
+                    });
+                    if (res.status === 401) return logout(); // 如果手环过期了，强制踢回登录页
+                    transactions.value = await res.json();
+                };
+
+                const addTransaction = async () => {
+                    if (!newAmount.value || !newCategory.value) return alert("不能为空");
+                    await fetch(`${API_BASE_URL}/transactions`, {
+                        method: "POST",
+                        headers: getAuthHeaders(), // 带上门禁卡
+                        body: JSON.stringify({
+                            amount: parseFloat(newAmount.value),
+                            category: newCategory.value,
+                            t_type: "支出"
+                        })
+                    });
+                    newAmount.value = '';
+                    newCategory.value = '';
+                    fetchTransactions();
+                };
+
+                const deleteTransaction = async (id) => {
+                    await fetch(`${API_BASE_URL}/transactions/${id}`, {
+                        method: "DELETE",
+                        headers: getAuthHeaders() // 带上门禁卡
+                    });
+                    fetchTransactions();
+                };
+
+                const fetchReport = async () => {
+                    const res = await fetch(`${API_BASE_URL}/transactions/report`, {
+                        headers: getAuthHeaders() // 带上门禁卡
+                    });
+                    reportData.value = await res.json();
+                };
+
+                // === 页面加载时的自动检查 ===
+                onMounted(() => {
+                    // 页面一打开，先去本地仓库翻一翻有没有存过的门禁卡
+                    const savedToken = localStorage.getItem("token");
+                    if (savedToken) {
+                        token.value = savedToken;
+                        isLoggedIn.value = true;
+                        fetchTransactions(); // 有卡直接进，拉取数据
+                    }
+                });
+
+                return {
+                    isLoggedIn, authUsername, authPassword,
+                    transactions, newAmount, newCategory, reportData,
+                    register, login, logout,
+                    addTransaction, deleteTransaction, fetchReport
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
